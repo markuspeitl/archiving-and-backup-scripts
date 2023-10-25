@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import os
 from os.path import isdir, isfile, exists
@@ -5,6 +6,9 @@ from os.path import isdir, isfile, exists
 
 # mksquashfs ./chroot chroot_gzip9_default.squashfs -noappend -comp gzip
 
+
+# More infos for compression algorithms:
+# https://dev.to/cookiebinary/comparing-compression-methods-on-linux-gzip-bzip2-xz-and-zstd-3idd
 
 # Data according to https://gist.github.com/baryluk/70a99b5f26df4671378dd05afef97fce
 
@@ -26,7 +30,7 @@ xz_comp_filters = ['x86', 'arm', 'armthumb', 'powerpc', 'sparc', 'ia64']
 # Rules: must be less than the block size and bigger than 8192bytes - examples 75%, 50%, 37.5%, 25%, or 32K, 16K, 8K
 xz_dictionary_sizes = [0.2, 0.4, 0.6, 0.8, 1.0]
 
-# Default (128k) - block sizes between 4K and 1M are supported
+# Default (128k -- 131072bytes) - block sizes between 4K and 1M are supported
 block_sizes_k_bytes = [4, 8, 16, 32, 64, 128, 256, 512, 1024]
 
 
@@ -78,11 +82,25 @@ def get_dir_size(path):
 
 
 def compression_set_to_options(compression_set):
+    if (not is_valid_compression_set(compression_set)):
+        return None
+
+    options = []
+    options.append('-comp')
+    options.append(compression_set['type'])
+    options.append('-b')
+    options.append(compression_set['type'])
 
     return ""
 
 
 def is_valid_compression_set(compression_set):
+    if ('type' not in compression_set):
+        raise Exception('A type of compression algorythm to use with mksquashfs is required')
+
+    if ('block_size' not in compression_set):
+        raise Exception('Block size is required')
+
     return True
 
 
@@ -129,4 +147,160 @@ source_dir_path = '/home/pmarkus'
 # Note that without considering the excludes of mksquashfs the compression ratio that results from this is not accurate
 orig_dir_size_bytes = get_dir_size(source_dir_path)
 
-mksquashfs(source_dir_path, '/home/pmarkus/target_squash_archive.img', compression_set, run_options)
+# mksquashfs(source_dir_path, '/home/pmarkus/target_squash_archive.img', compression_set, run_options)
+
+
+result = {
+    'time': 0,
+    'target': 'target.img',
+    'target_size': 0,
+    'src': "",
+    'src_size': 0
+}
+
+bench_inf0 = {
+    'label': "",
+    'before_s': 0,
+    'after_s': 0,
+    'time': 0
+}
+
+# Results taken from https://gist.github.com/baryluk/70a99b5f26df4671378dd05afef97fce
+prev_results = [
+    {
+        'label': 'gzip_128k',
+        'time': 168.0,
+        'after_s': 9248616448
+    },
+    {
+        'label': 'xz_128k',
+        'time': 376.0,
+        'after_s': 7822753792
+    },
+    {
+        'label': 'xz_128k_x86',
+        'time': 781.0,
+        'after_s': 7701307392
+    },
+    {
+        'label': 'xz_32k',
+        'time': 336.0,
+        'after_s': 8517169152
+    },
+    {
+        'label': 'zstd_128k_x15',
+        'time': 215.0,
+        'after_s': 8553738240
+    },
+    {
+        'label': 'zstd_32k_x15',
+        'time': 159.0,
+        'after_s': 9148821504
+    },
+    {
+        'label': 'zstd_32k_x22',
+        'time': 650.0,
+        'after_s': 9059016704
+    },
+    {
+        'label': 'zstd_128k_x22',
+        'time': 934.0,
+        'after_s': 8473190400
+    },
+    {
+        'label': 'lzo_32k_x9',
+        'time': 180.0,
+        'after_s': 10710016000
+    },
+    {
+        'label': 'lz4_32k',
+        'time': 21.0,
+        'after_s': 13007339520
+    },
+    {
+        'label': 'lz4_32k_HC',
+        'time': 121.0,
+        'after_s': 11628195840
+    }
+]
+
+for result in prev_results:
+    result['before_s'] = 26566785410
+
+for result in prev_results:
+    result['ratio'] = round(result['after_s'] / result['before_s'], 2)
+
+
+for result in prev_results:
+    result['size_reduction_per_second'] = round(((1.0 - result['ratio']) / result['time']) * 1000.0, 3)
+
+
+time_table = sorted(prev_results, key=lambda result: result['time'])
+size_table = sorted(prev_results, key=lambda result: result['ratio'])
+size_reduction_per_second_table = sorted(prev_results, key=lambda result: result['size_reduction_per_second'])
+# size_table = sorted(lambda result: result['after_s'], prev_results)
+
+
+def pretty_table(results, selected_keys):
+    from prettytable import PrettyTable
+    results_table = PrettyTable(selected_keys)
+
+    for result in results:
+        selected_fields = []
+        for key in selected_keys:
+            selected_fields.append(result[key])
+        results_table.add_row(selected_fields)
+
+    print(results_table)
+
+
+def ugly_print(results, selected_keys):
+    print(selected_keys)
+
+    for result in results:
+        selected_fields = []
+
+        for key in selected_keys:
+            selected_fields.append(result[key])
+
+        print(selected_fields)
+
+
+print("Timetable:")
+pretty_table(time_table, ['label', 'time', 'ratio', 'size_reduction_per_second'])
+print("Sizetable:")
+pretty_table(size_table, ['label', 'time', 'ratio', 'size_reduction_per_second'])
+
+print("Ratio reduction per second:")
+pretty_table(size_reduction_per_second_table, ['label', 'time', 'ratio', 'size_reduction_per_second'])
+
+
+# Conclusions for algorithms:
+# Discussion of the results of https://dev.to/cookiebinary/comparing-compression-methods-on-linux-gzip-bzip2-xz-and-zstd-3idd and the other results here
+# - xz has the strongest compression, but is slow
+# - zstd is a little better than gzip, bzi2 compression on 'normal' preset and on strong preset it is a bit weaker than xz (but only needs around half the time)
+# interestingly on 'normal' preset it is quite a bit faster than gzip.
+# According to the 'size_reduction_per_second' metric calculated above it is the third strongest when combining compression speed with ratio (only after lz4)
+
+# Different compression tiers based on requirements:
+# 1. For very low compression scenarios lz4 is the fastest
+# 2. Then for the next tier zstd (32k, x15) and gzip (128k) perform very similar (both outperforming lzo)
+# 3. Mid compression, zstd seems to outperform bzip2 in speed
+# 4. In the high compression rate it starts with a strong dropoff in compression speed - here zstd and xz compression perform similar, although zstd is faster on similar results
+# 5. If you have the computing resources and time nothing beats 'xz', as it can still reach a better ratio than zstd
+
+# 1. For high volume and day to day use LZ4, GZIP, ZSTD (low)
+# 2. For backup and creating archives that need to be opened somtimes and/or on low powered machines use ZSTD (decompression is also good with that)
+# 3. For archiving, when storage/retrieval time does not matter as much, maybe storage is limite use XZ
+
+
+# Block sizes (32k ... 128k ... 256k >> 1-2M):
+# - Bigger block sizes mean better compression ratio, but slower speed
+# (block size is probably in which sized chunks compression is performed, therefore if a couple of files fit into a block, similar or redundant information between files can be removed
+# though i have not found exact infomation yet)
+# - Bigger blocks increase RAM usage during compression
+# - When a file is smaller than the block size, the whole block needs to be decompressed to access the file
+
+# https://engineering.fb.com/2018/12/19/core-infra/zstandard/
+# At facebook they are using 256k block sizes for squashfs images with Zstd
+# Though it is best to take claims of the creator and large businesses that have bias with a grain of salt.
