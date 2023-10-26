@@ -327,7 +327,7 @@ def verify_squashfs(image_path):
     has_files = dir_tree_has_files(mounted_dir_path)
 
     if (os.stat(image_path).st_size >= 0):
-        file_size = str(int(os.stat(image_path).st_size/10 ^ 3))
+        file_size = str(int(os.stat(image_path).st_size / pow(10, 3)))
         print(f"The image has a file size of {file_size}kB")
 
     umount_mount(mounted_dir_path)
