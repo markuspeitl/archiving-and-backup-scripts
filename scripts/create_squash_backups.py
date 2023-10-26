@@ -106,8 +106,8 @@ def mk_squashfs_archive(source_dir, options):
     print_cmd_args(full_cmd_args)
 
     if (not options.dry_run):
-        print(full_cmd)
-        # os.system(full_cmd)
+        print("\n" + full_cmd)
+        os.system(full_cmd)
 
 
 # https://stackoverflow.com/questions/57304278/how-to-use-mksquashfs-regex
