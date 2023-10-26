@@ -283,6 +283,7 @@ def mount_squashfs_image(image_path, label):
 
     mount_dir = join(mount_images_dir, label)
     # os.makedirs(mount_dir)
+    # os.system(f"sudo mkdir -p {mount_dir} && sudo umount -l {mount_dir} && sudo mount {image_path} {mount_dir}")
     os.system(f"sudo mkdir -p {mount_dir} && sudo mount {image_path} {mount_dir}")
     return mount_dir
 
@@ -322,13 +323,18 @@ def verify_squashfs(image_path):
     random_uuid_string = str(uuid.uuid4())
     print(random_uuid_string)
 
-    mounted_dir_path = mount_squashfs_image(image_path, random_uuid_string)
+    try:
+        mounted_dir_path = mount_squashfs_image(image_path, random_uuid_string)
 
-    has_files = dir_tree_has_files(mounted_dir_path)
+        has_files = dir_tree_has_files(mounted_dir_path)
 
-    if (os.stat(image_path).st_size >= 0):
-        file_size = str(int(os.stat(image_path).st_size / pow(10, 3)))
-        print(f"The image has a file size of {file_size}kB")
+        if (os.stat(image_path).st_size >= 0):
+            file_size = str(int(os.stat(image_path).st_size / pow(10, 3)))
+            print(f"The image has a file size of {file_size}kB")
+
+    except Exception as err:
+        umount_mount(mounted_dir_path)
+        raise err
 
     umount_mount(mounted_dir_path)
 
