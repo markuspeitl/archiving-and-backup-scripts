@@ -57,7 +57,8 @@ def get_filter_options(filters_arg):
     if (not filters_arg):
         return []
 
-    cmd = ['-regex']
+    #cmd = ['-regex']
+    cmd = ['-wildcards']
 
     for filter in filters_arg:
         cmd.append('-e')
@@ -134,27 +135,45 @@ def mk_squashfs_archive(source_dir, options):
 # https://askubuntu.com/questions/628585/mksquashfs-not-excluding-file
 
 
+#Apperantly they need to be POSIX regular expressions otherwise it wont work:
+#https://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Basic_Regular_Expressions
 def get_universal_excludes():
     return [
-        '^\.cache',
-        '.+/\.cache',
-        '^cache',
-        '.+/cache',
-        '^logs',
-        '.+/logs',
-        '.+\.log',
-        '^node\_modules',
-        '.+/node\_modules',
-        '.+\.squash\.img',
+        '.cache',
+        '... .cache',
+        'cache',
+        '... cache',
+        'logs',
+        '... logs',
+        '*.log',
+        '... *.log',
+        'node_modules',
+        '... node_modules',
+        '... *.squash.img',
+        #'^node\_modules',
+        #'.*/node\_modules',
+        #'^node_modules',
+        #'.*/node_modules',
+        #'.*/node_modules/.*',
+        #'.+\.squash\.img',
+        #'^repos/PowerMindMapReloaded/client/node_modules/.*',
+        #'.*/.*/.*/node_modules/.*'
+        #'.*.*.*node_modules.*.*',
+        #'^repos/PowerMindMapReloaded/client/node_modules',
+        #'^repos/PowerMindMapReloaded/client/node_modules/.*',
+        
+        #'.*repos/PowerMindMapReloaded/client/node_modules/.*',
+        #'.*PowerMindMapReloaded/client/node_modules/.*',
     ]
 
 
 def get_home_excludes_expressions():
     return [
-        '^\.nvm',
-        '^\.npm',
-        '^\.vscode-server',
-        '.+/dist',
+        '.nvm',
+        '.npm',
+        '.vscode-server',
+        'dist',
+        '... dist',
 
         # Depends: contains user specific application data of snaps, can be important "application settings, profiles" or not so much "browser cache - images, cached pages, etc." for example with /snap/firefox
         # Probably there that it does not interfere with system apps on ~/.config or ~/.local or flatpak apps on ~/.var/app
@@ -168,38 +187,38 @@ def get_home_excludes_expressions():
 def get_sys_excludes_expressions():
     return [
         # Contains device nodes that appear as files, however they do not really exist and are a representation of the system connected devices/device drivers, for programs to communicate with
-        '^dev',
+        'dev',
         # Maily for letting programs or the system mount non permanent/removable media here (usb flash storage, drives, cdrom)
-        '^media',
+        'media',
         # Contains information about the system and its devices (can be printed out by using 'cat' on the filedescriptor), is a newer place for some stuff that historically was in /proc, also for kernel state changes, but more strictly structured than /proc
-        '^sys',
+        'sys',
         # Contains the initramfs image and the bootloader, might make sense to back this up for making the squashfs image bootable or backing up the specific kernel with the system (just for data and configs however this is not needed)
-        '^boot',
+        'boot',
         # Place for (partly) corrupted files to be placed if they are detected in a filsystem check run fschk
-        '^lost+found',
+        'lost+found',
         # Place for the user to mount partitions or devices example: network shares are mounted here, or for the os, but mainly more permanent things then like internal data drives
-        '^mnt',
+        'mnt',
         # Provides information about running processes, kernel status, files for changing kernel states
-        '^proc',
+        'proc',
         # Temporary directory for application to place data in, data is not guaranteed to persist after reboot
-        '^tmp',
+        'tmp',
         # Link to /var/run, containes data used by applications at runtime tmpfs in RAM #https://askubuntu.com/questions/169495/what-are-run-lock-and-run-shm-used-for
-        '^run',
-        '^var/run',
+        'run',
+        'var/run',
         # Related to /run, /run/lock contains lock files indicating that a shared resource is in use by a process (handling of access conflicts)
-        '^var/lock',
+        'var/lock',
         # Package manager state backups?
-        '^var/backups',
+        'var/backups',
         # Temporary cache files of applications (usually keeping something on disk so it does not need to be downloaded checked every time)
-        '^var/cache',
+        'var/cache',
         # Application logs - can get quite big (might be useful to back up on really critical servers for the sake of analysis and security)
-        '^var/log',
+        'var/log',
         # Temporary files
-        '^var/tmp',
+        'var/tmp',
         # variable state data that should persist (might make sense to back up when trying to run backed up applications)
-        '^var/lib',
+        'var/lib',
         # Data thats awaiting processing (printer queue, pending cronjobs), outgoing mail
-        '^var/spool'
+        'var/spool'
 
     ] + get_universal_excludes()
 
@@ -237,7 +256,7 @@ def get_sys_excludes_expressions():
 
 
 def get_sys_excludes_nohome_expressions():
-    return get_sys_excludes_expressions() + ['^home']
+    return get_sys_excludes_expressions() + ['home']
 
 
 def add_to_exclude_expressions(options, add_expr_list):
@@ -249,7 +268,7 @@ def add_to_exclude_expressions(options, add_expr_list):
 
 def backup_home_norepo(options):
     current_user_home = os.path.expanduser('~')
-    add_to_exclude_expressions(options, get_home_excludes_expressions() + ['^repos'])
+    add_to_exclude_expressions(options, get_home_excludes_expressions() + ['repos'])
 
     return mk_squashfs_archive(current_user_home, options)
 
