@@ -304,3 +304,11 @@ pretty_table(size_reduction_per_second_table, ['label', 'time', 'ratio', 'size_r
 # https://engineering.fb.com/2018/12/19/core-infra/zstandard/
 # At facebook they are using 256k block sizes for squashfs images with Zstd
 # Though it is best to take claims of the creator and large businesses that have bias with a grain of salt.
+
+# https://en.wikipedia.org/wiki/Zstd
+# Debian and Arch switched their packaging to zstd.
+# 0.8% bigger packages on arch but more than 10x faster decompression
+# Seems to be a generally very good pick for semi permanent archiving
+
+# For normal usage for archives/compression outside of a squashfs image
+# https://www.systutorials.com/docs/linux/man/1-zstd/
