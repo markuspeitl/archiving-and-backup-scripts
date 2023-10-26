@@ -141,7 +141,8 @@ def get_universal_excludes():
         '^cache',
         '.+/cache',
         '^logs',
-        '.+/logs'
+        '.+/logs',
+        '.+\.log',
         '^node\_modules',
         '.+/node\_modules',
         '.+\.squash\.img',
@@ -154,6 +155,13 @@ def get_home_excludes_expressions():
         '^\.npm',
         '^\.vscode-server',
         '.+/dist',
+
+        # Depends: contains user specific application data of snaps, can be important "application settings, profiles" or not so much "browser cache - images, cached pages, etc." for example with /snap/firefox
+        # Probably there that it does not interfere with system apps on ~/.config or ~/.local or flatpak apps on ~/.var/app
+        # '^snap'
+        # Depends: Contains per application data for flatpak apps contains (app data, user configurations, settings , caches + temp data) this is because flatpaks are only installed for a user and not for the system therefore all app data lands in ~
+        # Very similar to apps on ~/snap
+        # '^\.var/apps'
     ] + get_universal_excludes()
 
 
@@ -297,8 +305,9 @@ def dir_tree_has_files(directory):
     if (not directory or not exists(directory)):
         return False
 
-    print("Files in image: ")
-    print(os.listdir(directory))
+    print("\nFiles in image: ")
+    print("\n".join(os.listdir(directory)))
+    print("\n")
 
     for file in os.scandir(directory):
         if (isfile(file)):
@@ -316,6 +325,10 @@ def verify_squashfs(image_path):
     mounted_dir_path = mount_squashfs_image(image_path, random_uuid_string)
 
     has_files = dir_tree_has_files(mounted_dir_path)
+
+    if (os.stat(image_path).st_size >= 0):
+        file_size = str(int(os.stat(image_path).st_size/10 ^ 3))
+        print(f"The image has a file size of {file_size}kB")
 
     umount_mount(mounted_dir_path)
 
