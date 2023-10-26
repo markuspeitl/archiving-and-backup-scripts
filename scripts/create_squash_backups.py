@@ -17,7 +17,7 @@ def get_squash_backup_base_cmd(source_dir, backups_dir=None, compression_lvl=17)
         os.makedirs(backups_dir, exist_ok=True)
 
     if (not exists(source_dir)):
-        raise Exception("Source dir does not exist")
+        raise Exception(f"Source dir {source_dir} does not exist")
 
     fs_source_path_label = source_dir.replace('/', '-')
 
@@ -95,6 +95,9 @@ def mk_squashfs_archive(source_dir, options):
     if (options.use_current_working_dir):
         current_directory = os.getcwd()
         backup_dir = current_directory
+
+    if (options.sub_source_path):
+        source_dir = join(source_dir, options.sub_source_path)
 
     backup_cmd, target_image_path = get_squash_backup_base_cmd(source_dir, backups_dir=backup_dir, compression_lvl=options.compression_level)
 
@@ -240,8 +243,7 @@ def backup_home_norepo(options):
     current_user_home = os.path.expanduser('~')
     add_to_exclude_expressions(options, get_home_excludes_expressions() + ['^repos'])
 
-    # return mk_squashfs_archive(current_user_home, options)
-    return mk_squashfs_archive(join(current_user_home, 'wireguard'), options)
+    return mk_squashfs_archive(current_user_home, options)
 
 
 def backup_home(options):
@@ -335,6 +337,7 @@ def main():
     parser.add_argument('-cwd', '--use_current_working_dir', "--use_cwd", action="store_true", help="Use the current directory from which this script was called to store the image")
     parser.add_argument('-c', '--compression_level', '--compression', type=int, help="Compression level [1,22]", default=17)
     parser.add_argument('-nv', '--no_verify', "--skip_verify", action="store_true", help="Do not verify that the resulting image is mountable and readable after creating it")
+    parser.add_argument('-sub', '--sub_source_path', '--sub_source', help="Sub path of the source path to use for making an image instead (Mainly for debugging as it can break some excludes regexp)", default=None)
 
     args = parser.parse_args()
 
@@ -350,6 +353,8 @@ def main():
 
     else:
         mk_squashfs_archive(args.source_path_or_target, args)
+
+    # return mk_squashfs_archive(join(current_user_home, 'wireguard'), options)
 
 
 if __name__ == '__main__':
