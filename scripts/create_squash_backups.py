@@ -88,7 +88,14 @@ def print_cmd_args(args, vertical=True):
 
 
 def mk_squashfs_archive(source_dir, options):
-    backup_cmd = get_squash_backup_base_cmd(source_dir, backups_dir=options.backups_dir, compression_lvl=options.compression_level)
+
+    backup_dir = options.backups_dir
+
+    if (options.use_current_working_dir):
+        current_directory = os.getcwd()
+        backup_dir = current_directory
+
+    backup_cmd = get_squash_backup_base_cmd(source_dir, backups_dir=backup_dir, compression_lvl=options.compression_level)
     filter_options = get_filter_options(options.exclude_regex_filters)
 
     full_cmd_args = backup_cmd + filter_options
@@ -243,6 +250,7 @@ def main():
     parser.add_argument('source_path_or_target', help="Source directory to back up - or name of the preconfigured backup target")
     parser.add_argument('-f', '--exclude_regex_filters', '--regex_filters', '--filters', nargs='+', help="Posix regular expression filters to exclude from mksquashfs")
     parser.add_argument('-b', '--backups_dir', '--target_dir', help="", default="/backups")
+    parser.add_argument('-cwd', '--use_current_working_dir', "--use_cwd", action="store_true", help="Use the current directory from which this script was called to store the image")
     parser.add_argument('-c', '--compression_level', '--compression', type=int, help="Compression level [1,22]", default=17)
 
     args = parser.parse_args()
