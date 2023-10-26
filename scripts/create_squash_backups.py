@@ -108,7 +108,7 @@ def mk_squashfs_archive(source_dir, options):
 
 
 def get_universal_excludes():
-    return {
+    return [
         '\.cache',
         '.*\.cache\/.*',
         '.*\.cache\/.*',
@@ -116,7 +116,7 @@ def get_universal_excludes():
         '.*\/logs\/.*',
         '.+/node_modules',
         'node_modules/*',
-    }
+    ]
 
 
 def get_home_excludes_expressions():
@@ -226,24 +226,6 @@ def backup_home(options):
     mk_squashfs_archive(current_user_home, options)
 
 
-def get_sys_excludes_expressions():
-    return [
-        '\.cache',
-        '^\.nvm',
-        '^\.npm',
-        '^\.vscode-server',
-        '\.nvm',
-        '.*\.cache\/.*',
-        '.*cache\/.*',
-        '.*\/logs\/.*',
-        '^.*.img',
-        '.+/node_modules',
-        'node_modules/*',
-        '.+/dist',
-        'dist/*'
-    ]
-
-
 def backup_sys_nohome(options):
     add_to_exclude_expressions(options, get_sys_excludes_expressions())
     mk_squashfs_archive('/', options)
@@ -268,11 +250,11 @@ def main():
     if ('/' not in args.source_path_or_target):
         target_name = args.source_path_or_target
 
-        if (target_name == 'home_no_repo'):
+        if (target_name == 'home_no_repo' or target_name == 'homenorepo'):
             backup_home_norepo(args)
         elif (target_name == 'home'):
             backup_home(args)
-        elif (target_name == 'sys_no_home'):
+        elif (target_name == 'sys_no_home' or target_name == 'sysnohome' or target_name == 'sys'):
             backup_sys_nohome(args)
 
     else:
