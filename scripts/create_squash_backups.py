@@ -1,3 +1,4 @@
+import re
 import os
 from os.path import isdir, isfile, exists, expanduser, join
 from datetime import date
@@ -28,7 +29,7 @@ def get_squash_backup_base_cmd(source_dir, backups_dir=None, compression_lvl=17)
 
     settings_string = f"c_{comp_algo}-b_{block_size}-l_{compression_lvl}"
 
-    full_backup_name = 'squash' + fs_source_path_label + "-" + today_date_string + "-" + settings_string + '.img'
+    full_backup_name = 'squash' + fs_source_path_label + "-" + today_date_string + "-" + settings_string + '.squash.img'
 
     if (full_backup_name[0] == '-'):
         full_backup_name = full_backup_name[1:]
@@ -96,6 +97,10 @@ def mk_squashfs_archive(source_dir, options):
         backup_dir = current_directory
 
     backup_cmd, target_image_path = get_squash_backup_base_cmd(source_dir, backups_dir=backup_dir, compression_lvl=options.compression_level)
+
+    target_image_name = os.path.basename(target_image_path)
+    options.exclude_regex_filters.append(f".+/{str(re.escape(target_image_name))}")
+
     filter_options = get_filter_options(options.exclude_regex_filters)
 
     full_cmd_args = backup_cmd + filter_options
@@ -118,6 +123,8 @@ def mk_squashfs_archive(source_dir, options):
         print(f"Verification of {target_image_path} failed, please check if the image is valid manually or create the archive/image again")
         return None
 
+    print(f"Verification of {target_image_path} was successful")
+
     return target_image_path
 
 # https://stackoverflow.com/questions/57304278/how-to-use-mksquashfs-regex
@@ -126,13 +133,15 @@ def mk_squashfs_archive(source_dir, options):
 
 def get_universal_excludes():
     return [
-        '\.cache',
-        '.*\.cache\/.*',
-        '.*\.cache\/.*',
-        '.*cache\/.*',
-        '.*\/logs\/.*',
-        '.+/node_modules',
-        'node_modules/*',
+        '^\.cache',
+        '.+/\.cache',
+        '^cache',
+        '.+/cache',
+        '^logs',
+        '.+/logs'
+        '^node\_modules',
+        '.+/node\_modules',
+        '.+\.squash\.img',
     ]
 
 
@@ -141,9 +150,7 @@ def get_home_excludes_expressions():
         '^\.nvm',
         '^\.npm',
         '^\.vscode-server',
-        '^.*.img',
         '.+/dist',
-        'dist/*'
     ] + get_universal_excludes()
 
 
@@ -158,30 +165,30 @@ def get_sys_excludes_expressions():
         # Contains the initramfs image and the bootloader, might make sense to back this up for making the squashfs image bootable or backing up the specific kernel with the system (just for data and configs however this is not needed)
         '^boot',
         # Place for (partly) corrupted files to be placed if they are detected in a filsystem check run fschk
-        'lost+found',
+        '^lost+found',
         # Place for the user to mount partitions or devices example: network shares are mounted here, or for the os, but mainly more permanent things then like internal data drives
-        'mnt',
+        '^mnt',
         # Provides information about running processes, kernel status, files for changing kernel states
-        'proc',
+        '^proc',
         # Temporary directory for application to place data in, data is not guaranteed to persist after reboot
-        'tmp',
+        '^tmp',
         # Link to /var/run, containes data used by applications at runtime tmpfs in RAM #https://askubuntu.com/questions/169495/what-are-run-lock-and-run-shm-used-for
-        '/run',
-        'var/run',
+        '^run',
+        '^var/run',
         # Related to /run, /run/lock contains lock files indicating that a shared resource is in use by a process (handling of access conflicts)
-        'var/lock',
+        '^var/lock',
         # Package manager state backups?
         '^var/backups',
         # Temporary cache files of applications (usually keeping something on disk so it does not need to be downloaded checked every time)
-        'var/cache',
+        '^var/cache',
         # Application logs - can get quite big (might be useful to back up on really critical servers for the sake of analysis and security)
-        'var/log',
+        '^var/log',
         # Temporary files
-        'var/tmp',
+        '^var/tmp',
         # variable state data that should persist (might make sense to back up when trying to run backed up applications)
-        'var/lib',
+        '^var/lib',
         # Data thats awaiting processing (printer queue, pending cronjobs), outgoing mail
-        'var/spool'
+        '^var/spool'
 
     ] + get_universal_excludes()
 
@@ -233,7 +240,8 @@ def backup_home_norepo(options):
     current_user_home = os.path.expanduser('~')
     add_to_exclude_expressions(options, get_home_excludes_expressions() + ['^repos'])
 
-    return mk_squashfs_archive(current_user_home, options)
+    # return mk_squashfs_archive(current_user_home, options)
+    return mk_squashfs_archive(join(current_user_home, 'wireguard'), options)
 
 
 def backup_home(options):
@@ -260,12 +268,12 @@ def mount_squashfs_image(image_path, label):
     if (os.stat(image_path).st_size <= 0):
         raise Exception(f"Can not mount image to system, image at path '{image_path}' is empty")
 
-    if (not label or len(label)):
+    if (not label or len(label) <= 0):
         raise Exception(f"Label of mount point has to be non empty")
 
     mount_dir = join(mount_images_dir, label)
-    os.makedirs(mount_dir)
-    os.system(f"sudo mount {image_path} {mount_dir}")
+    # os.makedirs(mount_dir)
+    os.system(f"sudo mkdir -p {mount_dir} && sudo mount {image_path} {mount_dir}")
     return mount_dir
 
 
@@ -274,7 +282,8 @@ def umount_mount(mount_point):
     if (not exists(mount_point)):
         raise Exception(f"Can not unmount point at '{mount_point}' the path does not exist")
 
-    os.system(f"sudo umount {mount_point}")
+    os.system(f"sudo umount -l {mount_point}")
+    os.system(f"sudo rm -d {mount_point}")
 
 
 def umount_labeled(mount_label):
@@ -286,8 +295,10 @@ def dir_tree_has_files(directory):
     if (not directory or not exists(directory)):
         return False
 
-    for file in os.scandir(directory):
+    print("Files in image: ")
+    print(os.listdir(directory))
 
+    for file in os.scandir(directory):
         if (isfile(file)):
             return True
 
@@ -297,7 +308,8 @@ def dir_tree_has_files(directory):
 def verify_squashfs(image_path):
 
     import uuid
-    random_uuid_string = uuid.uuid4()
+    random_uuid_string = str(uuid.uuid4())
+    print(random_uuid_string)
 
     mounted_dir_path = mount_squashfs_image(image_path, random_uuid_string)
 
