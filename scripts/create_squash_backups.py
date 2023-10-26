@@ -6,9 +6,9 @@ import argparse
 import sys
 
 # target_dir = "/backups"
+mount_images_dir = '/mnt'
 
-
-def get_squash_backup_base_cmd(source_dir, backups_dir=None, compression_lvl=17):
+def get_squash_backup_base_cmd(source_dir, backups_dir=None, compression_lvl=17, label_prefix=""):
 
     if (not backups_dir):
         backups_dir = "/backups"
@@ -19,7 +19,14 @@ def get_squash_backup_base_cmd(source_dir, backups_dir=None, compression_lvl=17)
     if (not exists(source_dir)):
         raise Exception(f"Source dir {source_dir} does not exist")
 
+
     fs_source_path_label = source_dir.replace('/', '-')
+    if(source_dir.strip() == "/"):
+        fs_source_path_label = "system"
+
+    if(label_prefix != ""):
+        label_prefix = label_prefix +  '__'
+
 
     today = date.today()
     today_date_string = today.strftime("%d-%m-%Y")
@@ -29,7 +36,7 @@ def get_squash_backup_base_cmd(source_dir, backups_dir=None, compression_lvl=17)
 
     settings_string = f"c_{comp_algo}-b_{block_size}-l_{compression_lvl}"
 
-    full_backup_name = 'squash' + fs_source_path_label + "-" + today_date_string + "-" + settings_string + '.squash.img'
+    full_backup_name = label_prefix + fs_source_path_label + "-" + today_date_string + "-" + settings_string + '.squash.img'
 
     if (full_backup_name[0] == '-'):
         full_backup_name = full_backup_name[1:]
@@ -100,10 +107,10 @@ def mk_squashfs_archive(source_dir, options):
     if (options.sub_source_path):
         source_dir = join(source_dir, options.sub_source_path)
 
-    backup_cmd, target_image_path = get_squash_backup_base_cmd(source_dir, backups_dir=backup_dir, compression_lvl=options.compression_level)
+    backup_cmd, target_image_path = get_squash_backup_base_cmd(source_dir, backups_dir=backup_dir, compression_lvl=options.compression_level, label_prefix=options.label_prefix)
 
     target_image_name = os.path.basename(target_image_path)
-    options.exclude_regex_filters.append(f".+/{str(re.escape(target_image_name))}")
+    options.exclude_regex_filters.append(f"... {str(target_image_name)}")
 
     filter_options = get_filter_options(options.exclude_regex_filters)
 
@@ -119,6 +126,9 @@ def mk_squashfs_archive(source_dir, options):
         return None
 
     os.system(full_cmd)
+
+    print("Ran command:")
+    print("\n" + full_cmd)
 
     if (options.no_verify):
         return target_image_path
@@ -186,14 +196,14 @@ def get_home_excludes_expressions():
 
 def get_sys_excludes_expressions():
     return [
+        #NO BACKUP
+        
         # Contains device nodes that appear as files, however they do not really exist and are a representation of the system connected devices/device drivers, for programs to communicate with
         'dev',
         # Maily for letting programs or the system mount non permanent/removable media here (usb flash storage, drives, cdrom)
         'media',
         # Contains information about the system and its devices (can be printed out by using 'cat' on the filedescriptor), is a newer place for some stuff that historically was in /proc, also for kernel state changes, but more strictly structured than /proc
         'sys',
-        # Contains the initramfs image and the bootloader, might make sense to back this up for making the squashfs image bootable or backing up the specific kernel with the system (just for data and configs however this is not needed)
-        'boot',
         # Place for (partly) corrupted files to be placed if they are detected in a filsystem check run fschk
         'lost+found',
         # Place for the user to mount partitions or devices example: network shares are mounted here, or for the os, but mainly more permanent things then like internal data drives
@@ -207,20 +217,64 @@ def get_sys_excludes_expressions():
         'var/run',
         # Related to /run, /run/lock contains lock files indicating that a shared resource is in use by a process (handling of access conflicts)
         'var/lock',
+        # Temporary files
+        'var/tmp',
+        
+        #POSSIBLE BACKUP
+
+        # Contains the initramfs image and the bootloader, might make sense to back this up for making the squashfs image bootable or backing up the specific kernel with the system (just for data and configs however this is not needed)
+        'boot',
         # Package manager state backups?
         'var/backups',
         # Temporary cache files of applications (usually keeping something on disk so it does not need to be downloaded checked every time)
         'var/cache',
         # Application logs - can get quite big (might be useful to back up on really critical servers for the sake of analysis and security)
         'var/log',
-        # Temporary files
-        'var/tmp',
         # variable state data that should persist (might make sense to back up when trying to run backed up applications)
-        'var/lib',
+        #'var/lib',
         # Data thats awaiting processing (printer queue, pending cronjobs), outgoing mail
         'var/spool'
 
     ] + get_universal_excludes()
+
+def get_sys_data_excludes():
+    return [
+        #System wide installed applications, binaries, libraries, headers - Can be restored by reinstalling with package manager
+        'usr/bin',
+        'usr/lib',
+        'usr/lib64',
+        'usr/libx32',
+        'usr/sbin',
+        'usr/src',
+        'usr/games',
+        'usr/include',
+        'usr/lib32',
+        'usr/libexec',
+        'usr/share',
+        # Links to /usr
+        'bin',
+        'lib',
+        'lib64',
+        'libx32',
+        'sbin',
+        'lib32',
+        #The actual .snap packages that represent a readlonly filesystem that is mounted to system when using (and application the gets a chroot/pivotroot for that mount) -- Can be restored deterministically when pinning version
+        'var/lib/snapd/snaps',
+        'var/lib/snapd',
+        #Where the snaps are actually mounted into the system (they are mounted reasonly so the snap has to store its data elsewhere /var/snap for variable system wide data /home/user/snap for user specific data )
+        'snap',
+        #optional
+        'usr/local',
+        # User data ~/.var/app, flatpak iself conf ~/.local/share/flatpak, system-wide configuration are somewhere in var/lib/flatpak
+        # For flatpaks it really depends as apart from userdata everything is in one place (but there are also system configurations)
+        # Example in /var/lib/flatpak/app/com.vscodium.codium/.../files there is a /bin and /lib dir for the application execution -> then there is also /etc holding system wide conf -> then there is /share where i do not know if it is supposed to represent /usr/share or more like /var/lib
+        'var/lib/flatpak',
+        'var/lib/apt',
+        'var/lib/dpkg',
+        'var/lib/dkms',
+        # Docker containers are supposed to hold not persistent changeable data themselves and images should be stored somewhere else (dockerhub, built with dockerfile)
+        'var/lib/docker/!(*volumes*)',
+    ]
 
 # What does get backed up (without symlinks)
 # -home (optional) -> better though is a dedicated backup for user data
@@ -254,7 +308,6 @@ def get_sys_excludes_expressions():
 # (/var/backups)
 # opt - if you installed anything to there
 
-
 def get_sys_excludes_nohome_expressions():
     return get_sys_excludes_expressions() + ['home']
 
@@ -279,16 +332,49 @@ def backup_home(options):
 
     return mk_squashfs_archive(current_user_home, options)
 
-
 def backup_sys_nohome(options):
-    add_to_exclude_expressions(options, get_sys_excludes_expressions())
+    add_to_exclude_expressions(options, get_sys_excludes_expressions() + ['home'])
     return mk_squashfs_archive('/', options)
 
 
-mount_images_dir = '/mnt'
+def backup_sys_data_nohome(options):
+    add_to_exclude_expressions(options, get_sys_excludes_expressions() + get_sys_data_excludes() + ['home'])
+    return mk_squashfs_archive('/', options)
+
+def create_data_backups(options):
+    #1. Create one data backup for each user (back up configuration/setting files and user data, but no application binaries, libs or runtime data)
+
+    #2. Create sys backup mainly for /etc, /srv, /usr/local/share, /usr/local/etc , maybe usr/local + a dpkg list + flatpak list + snap list
+    # Optional: /usr/local -> libs and binaries built by sysadmin (not from dist pkg manager), usr/local/share, usr/share (readonly) (architecture-independent shareable text files)
+    #https://www.ibm.com/docs/en/aix/7.1?topic=tree-usrshare-directory
+    print("test")
+    #Data backup for sys:
+        # etc - system wide configurations (important) - bootloader conf, sshd conf, firewall, device mount locations (fstab)
+        # /var/snap - proably not important but to be on the safe side, containes runtime persistant variable state data for snaps
+        # /var/mail
+        # /var/ -- databases if they are stored here somewhere, basically any data written by an application that does not go into a used specific dir, lands here
+        # /var/logs -- if logs have any significance in this case
+        
+        # no /usr/ or /usr/local
+        # no /usr/share, /usr/local/share (data that is readonly and shareable between architectures) --> would be just the same when reinstalling the application again (.desktop files, etc.) (static files not dependant on arch like ARM, x86, .etc)
+        # no /usr/{bin, lib, games, include, src, etc.} mainly executables, binaries, libraries and headers sources, but can be installed again via package manager
+        # /usr/local is the only location in /usr/ which would make sense to back up, only if it contains an application that is difficult to build and configure (then maybe)
+        # /boot similar to /usr/local if there is a custom build kernel or initramfs on there, however usually this is managed by the package manager, and some bootloaders grub2 store their configuration in /etc/ which makes this directory easily rebuildable on a common distro
+        # no root - unless changed in any way by sysadmin
+        # /snap might have some data??
+        # /var for the most part this is persistant runtime applications data - only really useful when trying to restore an application to that state, by copying (without going through the package manager)
+
+target_mapper = {
+    'home_no_repo': backup_home_norepo,
+    'homenorepo': backup_home_norepo,
+    'home': backup_home,
+    'sys_no_home': backup_sys_nohome,
+    'sysnohome': backup_sys_nohome,
+    'sys_data_no_home': backup_sys_data_nohome,
+    'sysdatanohome': backup_sys_data_nohome
+}
+
 # Note that this does not work with the mksquashfs '-nopad' option, as the resulting image is not mountable
-
-
 def mount_squashfs_image(image_path, label):
 
     if (not exists(image_path)):
@@ -303,7 +389,12 @@ def mount_squashfs_image(image_path, label):
     mount_dir = join(mount_images_dir, label)
     # os.makedirs(mount_dir)
     # os.system(f"sudo mkdir -p {mount_dir} && sudo umount -l {mount_dir} && sudo mount {image_path} {mount_dir}")
+
+    print(f"sudo mount {image_path} {mount_dir}")
     os.system(f"sudo mkdir -p {mount_dir} && sudo mount {image_path} {mount_dir}")
+
+    os.system(f"du -h -d 1 {mount_dir}")
+
     return mount_dir
 
 
@@ -312,6 +403,7 @@ def umount_mount(mount_point):
     if (not exists(mount_point)):
         raise Exception(f"Can not unmount point at '{mount_point}' the path does not exist")
 
+    print(f"sudo umount -l {mount_point}")
     os.system(f"sudo umount -l {mount_point}")
     os.system(f"sudo rm -d {mount_point}")
 
@@ -376,19 +468,16 @@ def main():
     parser.add_argument('-c', '--compression_level', '--compression', type=int, help="Compression level [1,22]", default=17)
     parser.add_argument('-nv', '--no_verify', "--skip_verify", action="store_true", help="Do not verify that the resulting image is mountable and readable after creating it")
     parser.add_argument('-sub', '--sub_source_path', '--sub_source', help="Sub path of the source path to use for making an image instead (Mainly for debugging as it can break some excludes regexp)", default=None)
+    parser.add_argument('-pre', '--label_prefix', help="Label prefix for the resulting file (is set automatically to target)", default="")
 
     args = parser.parse_args()
 
     if ('/' not in args.source_path_or_target):
         target_name = args.source_path_or_target
 
-        if (target_name == 'home_no_repo' or target_name == 'homenorepo'):
-            backup_home_norepo(args)
-        elif (target_name == 'home'):
-            backup_home(args)
-        elif (target_name == 'sys_no_home' or target_name == 'sysnohome' or target_name == 'sys'):
-            backup_sys_nohome(args)
-
+        if(target_name in target_mapper):
+            args.label_prefix = target_name
+            target_mapper[target_name](args)
     else:
         mk_squashfs_archive(args.source_path_or_target, args)
 
