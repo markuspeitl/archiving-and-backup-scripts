@@ -48,7 +48,7 @@ def get_squash_backup_base_cmd(source_dir, backups_dir=None, compression_lvl=17)
         "-noappend"
     ]
 
-    return cmd
+    return cmd, target_path
 
 
 def get_filter_options(filters_arg):
@@ -95,7 +95,7 @@ def mk_squashfs_archive(source_dir, options):
         current_directory = os.getcwd()
         backup_dir = current_directory
 
-    backup_cmd = get_squash_backup_base_cmd(source_dir, backups_dir=backup_dir, compression_lvl=options.compression_level)
+    backup_cmd, target_image_path = get_squash_backup_base_cmd(source_dir, backups_dir=backup_dir, compression_lvl=options.compression_level)
     filter_options = get_filter_options(options.exclude_regex_filters)
 
     full_cmd_args = backup_cmd + filter_options
@@ -104,11 +104,21 @@ def mk_squashfs_archive(source_dir, options):
     # print(full_cmd)
 
     print_cmd_args(full_cmd_args)
+    print("\n" + full_cmd)
 
-    if (not options.dry_run):
-        print("\n" + full_cmd)
-        os.system(full_cmd)
+    if (options.dry_run):
+        return None
 
+    os.system(full_cmd)
+
+    if (options.no_verify):
+        return target_image_path
+
+    if (not exists(target_image_path) or not verify_squashfs(target_image_path)):
+        print(f"Verification of {target_image_path} failed, please check if the image is valid manually or create the archive/image again")
+        return None
+
+    return target_image_path
 
 # https://stackoverflow.com/questions/57304278/how-to-use-mksquashfs-regex
 # https://askubuntu.com/questions/628585/mksquashfs-not-excluding-file
@@ -223,24 +233,84 @@ def backup_home_norepo(options):
     current_user_home = os.path.expanduser('~')
     add_to_exclude_expressions(options, get_home_excludes_expressions() + ['^repos'])
 
-    mk_squashfs_archive(current_user_home, options)
+    return mk_squashfs_archive(current_user_home, options)
 
 
 def backup_home(options):
     current_user_home = os.path.expanduser('~')
     add_to_exclude_expressions(options, get_home_excludes_expressions())
 
-    mk_squashfs_archive(current_user_home, options)
+    return mk_squashfs_archive(current_user_home, options)
 
 
 def backup_sys_nohome(options):
     add_to_exclude_expressions(options, get_sys_excludes_expressions())
-    mk_squashfs_archive('/', options)
+    return mk_squashfs_archive('/', options)
+
+
+mount_images_dir = '/mnt'
+# Note that this does not work with the mksquashfs '-nopad' option, as the resulting image is not mountable
+
+
+def mount_squashfs_image(image_path, label):
+
+    if (not exists(image_path)):
+        raise Exception(f"Can not mount image to system, image at path '{image_path}' does not exist")
+
+    if (os.stat(image_path).st_size <= 0):
+        raise Exception(f"Can not mount image to system, image at path '{image_path}' is empty")
+
+    if (not label or len(label)):
+        raise Exception(f"Label of mount point has to be non empty")
+
+    mount_dir = join(mount_images_dir, label)
+    os.makedirs(mount_dir)
+    os.system(f"sudo mount {image_path} {mount_dir}")
+    return mount_dir
+
+
+def umount_mount(mount_point):
+
+    if (not exists(mount_point)):
+        raise Exception(f"Can not unmount point at '{mount_point}' the path does not exist")
+
+    os.system(f"sudo umount {mount_point}")
+
+
+def umount_labeled(mount_label):
+    mount_dir = join(mount_images_dir, mount_label)
+    umount_mount(mount_dir)
+
+
+def dir_tree_has_files(directory):
+    if (not directory or not exists(directory)):
+        return False
+
+    for file in os.scandir(directory):
+
+        if (isfile(file)):
+            return True
+
+    return False
+
+
+def verify_squashfs(image_path):
+
+    import uuid
+    random_uuid_string = uuid.uuid4()
+
+    mounted_dir_path = mount_squashfs_image(image_path, random_uuid_string)
+
+    has_files = dir_tree_has_files(mounted_dir_path)
+
+    umount_mount(mounted_dir_path)
+
+    return has_files
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Manage the dotfiles and configuration backups to a git repository and install the .dotfiles in new systems by symlinking"
+        description="Create squashfs images for backing up/ archiving the data on a system"
     )
 
     parser.add_argument('-dry', '--dry_run', action="store_true", help="Do not commit any changes to the system, only print what would be changed")
@@ -249,9 +319,10 @@ def main():
 
     parser.add_argument('source_path_or_target', help="Source directory to back up - or name of the preconfigured backup target")
     parser.add_argument('-f', '--exclude_regex_filters', '--regex_filters', '--filters', nargs='+', help="Posix regular expression filters to exclude from mksquashfs")
-    parser.add_argument('-b', '--backups_dir', '--target_dir', help="", default="/backups")
+    parser.add_argument('-b', '--backups_dir', '--target_dir', help="The directory to store the resulting squashfs images to", default="/backups")
     parser.add_argument('-cwd', '--use_current_working_dir', "--use_cwd", action="store_true", help="Use the current directory from which this script was called to store the image")
     parser.add_argument('-c', '--compression_level', '--compression', type=int, help="Compression level [1,22]", default=17)
+    parser.add_argument('-nv', '--no_verify', "--skip_verify", action="store_true", help="Do not verify that the resulting image is mountable and readable after creating it")
 
     args = parser.parse_args()
 
