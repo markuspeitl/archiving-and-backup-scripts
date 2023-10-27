@@ -230,6 +230,7 @@ def get_sys_excludes_expressions():
         'var/cache',
         # Application logs - can get quite big (might be useful to back up on really critical servers for the sake of analysis and security)
         'var/log',
+        'var/logs',
         # variable state data that should persist (might make sense to back up when trying to run backed up applications)
         #'var/lib',
         # Data thats awaiting processing (printer queue, pending cronjobs), outgoing mail
@@ -275,6 +276,141 @@ def get_sys_data_excludes():
         # Docker containers are supposed to hold not persistent changeable data themselves and images should be stored somewhere else (dockerhub, built with dockerfile)
         'var/lib/docker/!(*volumes*)',
     ]
+
+def get_home_data_excludes():
+    return [
+        'AppImage',
+        #'apps',
+        'apps/REAPER',
+        #Really nice build of obs with good plugins and stuff
+        #Don't exclude config directory as it contains obs profiles and scenes
+        'apps/obs_portable_29_1_3/!(*config*)',
+        'apps/Godot_v4_0_2',
+        '.cache',
+        '.conda',
+        '.condarc',
+        '.dbus',
+        '.deno',
+        '.dmrc',
+        '.dotfiles_manager_backup',
+        '.dotnet',
+        '.fonts.conf',
+        '.gem',
+        '.gnome',
+        '.java',
+        '.lesshst',
+        '.log',
+        'lost+found',
+        'lowerbind',
+        #Python virtual environments should not be permanenet (easy to recreate with file)
+        'miniconda3',
+        '.mono',
+        '.muse-hub'
+        '.npm',
+        'nuget',
+        '.nv',
+        '.nvm',
+        '.omnisharp',
+        'Paradox Interactive_work',
+        '.pki',
+        '.plastic4',
+        '.shutter',
+        '.ssr',
+        '.toguaudioline',
+        #Probably only hub and editor not projects
+        'Unity',
+        '.zynaddsubfx-bank-cache.xml',
+        '.zcompdump*',
+        '.xsession-errors*',
+        '.Xauthority',
+        #Mostly just extensions (can be easily restored from settings sync)
+        '.vscode',
+        '.vscode-oss',
+        #Same as with other stuff that stores data with the binaries, if it took some time to craft and optimize back up
+        #Note that saves and app configurations are stored withing the wine prefixes (so depending on what is done with wine this can be backed up)
+        '.wine',
+        #Probably rendered proxies from Davinci Resolve
+        'Videos/CacheClip',
+        #Files for testing what type of files can be imported under linux (which is not many)
+        'Videos/capability-test-files',
+        'Videos/Resolve Project Backups',
+        #Repos should always be stored on git repository (and data somewhere where it is backed up)
+        'repos'
+        #I guess digikam photo organization or something like that
+        'Pictures/*db',
+        '.nvidia-settings-rc',
+        #For now as there is only one dir under it right now
+        'Music',
+        'Games',
+        #Locations of davinci resolve seem to be just bad ports from windows
+        'Documents/BlackmagicDesign',
+        'recordingprojects',
+        #There should be nothing but temporary files in Downloads, if not then it is time to organize
+        'Downloads',
+        #The problem with Vcode ist that it or its extensions use the .config directory for all data (apart from the extensions under ~)
+        '.config/Code/Cache*',
+        '.config/Code/Crash*',
+        '.config/Code/Service Worker',
+        '.config/Code/User/workspaceStorage',
+        '.config/Code/User/globalStorage',
+        '.config/Code/User/History',
+        #This is already well backed up
+        '.config/joplin-desktop',
+        #Plugins and reaper config stored here
+        #~/.config/REAPER,
+        #Probably the wrong location to place saves
+        # Interesting with native version of .steam, rimworld (linux native) is located at ~/.steam/debian-installation/steamapps/common/RimWorld/
+        # However the Saves, the mods and the mod configurations are at "~/.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios"
+        # Another one of these situation where you do not want ".config/unity3d/Ludeon Studio" in your main backup, but still to have it
+        # as it takes effort to configure mods together so they are compatible
+        '.config/unity3d/cache',
+        '.config/unity3d/Ludeon Studios',
+        #'.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Saves',
+        '.config/unity3d/Ludeon Studios/RimWorld by Ludeon Studios/Saves',
+        'temp-south-america-presentation',
+        #Trash bin
+        '.local/share/Trash',
+        #File indexer cache
+        '.local/share/baloo',
+        #qtwebengine browser cache of qutebrowser (dir however also contains browsing history, which is useful to back up when moving to a new desktop machine)
+        '.local/share/qutebrowser/webengine'
+        #Synthesizer
+        '.local/share/vital',
+        '.local/share/gem',
+        #Contains flatpaks that were installed for the local user (instead of system /var/lib/flatpak)
+        '.local/share/flatpak',
+        #Applications/binaries/libs installed for user (some binaries for local python packages land here, and other things like that)
+        '.local/bin',
+        '.local/lib',
+        # It generally user specific flatpak application data that lands in .var/app
+        # For browser this can be data for installed extensions
+        '.var/app/com.valvesoftware.Steam'
+        '.var/app/com.github.micahflee.torbrowser-launcher'
+        #I do not have any particular wine settings
+        '.var/app/org.winehq.Wine'
+        '.var/app/net.lutris.Lutris'
+        '.var/app/net.supertuxkart.SuperTuxKart'
+        #Unless this is the main browser than it might make sense
+        '.var/app/org.mozilla.firefox'
+        
+
+    ]
+
+#.var, snap, .steam
+
+#- Videos: -> Backup Videos (and Videos of Downloads)
+#- Pictures: (Currently not very big so fine to back up with other stuff)
+#- ~/Music/sound-of-light: Should have one backup somewhere -- only one (music best stored somewhere from where it can be redownloaded unless it is your own or you carefully curated a playlist)
+#- ~/Games/starsector: although this should not be in the main backup there should be a copy somewhere as it took a bit of work to configure all the mods
+#the same with Rimwold at??
+# - recordingprojects: NEEDS SOME BACKUP: Definetely its own backup (probably best to do a backup for large media files/ or media projects in general)
+# - temp-south-america-presentation NEEDS SOME BACKUP: if not already backed up
+
+# ~/.local/share/DaVinciResolve seems to contain actual configs and settings of resolve (while not placing anything in the actual config dir .config)
+
+
+#.config: dirs that are bigger than 10MB do something wrong
+
 
 # What does get backed up (without symlinks)
 # -home (optional) -> better though is a dedicated backup for user data
